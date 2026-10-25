@@ -6,8 +6,9 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 from statsmodels.tsa.statespace.sarimax import SARIMAXResults
-from sarimax_process import previsao_sarimax
-from api_info_dengue import atualizar_modelo
+from baixar_dados import baixar_dados
+from atualizar_modelo import atualizar_modelo
+from previsao import previsao
 
 st.set_page_config(
     page_title="Sistema de Avaliação de Arboviroses",
@@ -54,13 +55,72 @@ modelos = {
 }
 
 def predicao(modelo):
-    modelo_treinado = modelos[modelo]
-    dados_novos = atualizar_modelo(modelo_treinado, modelo_treinado["obj_modelo"], modelo_treinado["caminho"])
-    resultado_casos = previsao_sarimax(modelo_treinado, dados_novos[["umidade", "temperatura"]])
-    print(resultado_casos["previsao"])
-    with row1:
-        st.write("Casos")
-        st.line_chart(resultado_casos)
+    with st.spinner("Checando por novos dados..."):
+        baixar_dados()
+    pkl_modelo = modelos[modelo]
+    pkl_modelo = pkl_modelo["obj_modelo"]
+    if modelo == "Dengue":
+        print("dengue")
+        dados_novos = pd.read_csv("./modelos/dataset_atual/dengue_tratado.csv",
+        parse_dates=["data_iniSE"],
+        index_col="data_iniSE").sort_index()
+        caminho_modelo = "./modelos/sarimax_dengue.pkl"
+        with st.spinner("Atualizando modelo..."):
+            atualizado = atualizar_modelo(pkl_modelo, dados_novos, caminho_modelo)
+            if atualizado:
+                print("sim")
+                st.success("Modelo atualizado!")
+                resultados = previsao(pkl_modelo, dados_novos)
+            else:
+                print("não")
+                st.success("O modelo já está atualizado!")
+                resultados = previsao(pkl_modelo, dados_novos)
+
+        with row1:
+            st.write("Casos")
+            st.line_chart(resultados)
+
+    if modelo == "Chikungunya":
+        print("chik")
+        dados_novos = pd.read_csv("./modelos/dataset_atual/chikungunya_tratado.csv",
+        parse_dates=["data_iniSE"],
+        index_col="data_iniSE").sort_index()
+        caminho_modelo = "modelos/sarimax_chik.pkl"
+        with st.spinner("Atualizando modelo..."):
+            atualizado = atualizar_modelo(pkl_modelo, dados_novos, caminho_modelo)
+            if atualizado:
+                print("sim")
+                st.success("Modelo atualizado!")
+                resultados = previsao(pkl_modelo, dados_novos)
+            else:
+                print("não")
+                st.success("O modelo já está atualizado!")
+                resultados = previsao(pkl_modelo, dados_novos)
+
+        with row1:
+                st.write("Casos")
+                st.line_chart(resultados)
+
+    if modelo == "Zika":
+        print("zika")
+        dados_novos = pd.read_csv("./modelos/dataset_atual/zika_tratado.csv",
+        parse_dates=["data_iniSE"],
+        index_col="data_iniSE").sort_index()
+        caminho_modelo = "modelos/sarimax_zika.pkl"
+        with st.spinner("Atualizando modelo..."):
+            atualizado = atualizar_modelo(pkl_modelo, dados_novos, caminho_modelo)
+            if atualizado:
+                print("sim")
+                st.success("Modelo atualizado!")
+                resultados = previsao(pkl_modelo, dados_novos)
+            else:
+                print("não")
+                st.success("O modelo já está atualizado!")
+                resultados = previsao(pkl_modelo, dados_novos)
+
+        with row1:
+                st.write("Casos")
+                st.line_chart(resultados)
 
 col1, col2, col3 = st.columns([1.5, 1, 1])
 with col2:
