@@ -8,6 +8,7 @@ from statsmodels.tsa.statespace.sarimax import SARIMAXResults
 from baixar_dados import baixar_dados
 from atualizar_modelo import atualizar_modelo
 from previsao import previsao
+import requests
 
 st.set_page_config(
     page_title="Sistema de Avaliação de Arboviroses",
@@ -38,10 +39,12 @@ CONFIG = {
 
 def predicao(nome):
     cfg = CONFIG[nome]
-
+    
     with st.spinner("Checando por novos dados..."):
-        baixar_dados()
-
+        try:
+            baixar_dados()
+        except requests.exceptions.RequestException:
+            return None
     pkl_modelo = carregar_modelo(cfg["modelo"])
     dados_novos = pd.read_csv(
         cfg["dados"],
@@ -54,7 +57,6 @@ def predicao(nome):
         resultados = previsao(pkl_modelo, dados_novos, semanas_futuro)
 
     return atualizado, resultados
-
 
 def limpar():
     st.session_state.pop("resultado", None)
@@ -84,13 +86,16 @@ st.caption(f"Último dado do modelo: {ultima_data:%d/%m/%Y}")
 st.write("Semanas futuras selecionadas:", semanas_futuro)
 
 if st.button("Fazer previsão", type="primary"):
-    atualizado, resultados = predicao(opcao)
-    st.session_state["resultado"] = {
-        "opcao": opcao,
-        "atualizado": atualizado,
-        "dados": resultados,
-    }
-
+    saida = predicao(opcao)
+    if saida is not None:
+        atualizado, resultados = predicao(opcao)
+        st.session_state["resultado"] = {
+            "opcao": opcao,
+            "atualizado": atualizado,
+            "dados": resultados,
+        }
+    else:
+        st.toast("Sem conexão, não foi possível atualizar.")
 row1 = st.container()
 
 res = st.session_state.get("resultado")
