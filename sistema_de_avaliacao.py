@@ -4,7 +4,6 @@
 
 import streamlit as st
 import pandas as pd
-from datetime import date
 from statsmodels.tsa.statespace.sarimax import SARIMAXResults
 from baixar_dados import baixar_dados
 from atualizar_modelo import atualizar_modelo
@@ -17,121 +16,98 @@ st.set_page_config(
     page_icon="./assets/mosquito.png"
 )
 
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Roboto&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Roboto', sans-serif;
-    }
-
-    div.stButton > button:first-child {
-        background-color: #203366;
-        color: white;
-        border: none;
-    }
-    div.stButton > button:first-child:hover {
-        background-color: #909ed0;
-        color: white;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-dengue = SARIMAXResults.load('./modelos/sarimax_dengue.pkl')
-chikugunya = SARIMAXResults.load('./modelos/sarimax_chik.pkl')
-zika = SARIMAXResults.load('./modelos/sarimax_zika.pkl')
-
-modelos = {
-    "Dengue": {"obj_modelo": dengue, 
-               "caminho": "./modelos/sarimax_dengue.pkl"},
+@st.cache_resource
+def carregar_modelo(caminho):
+    return SARIMAXResults.load(caminho)
 
 
-    "Chikungunya": {"obj_modelo": chikugunya, 
-               "caminho": "./modelos/sarimax_chik.pkl"},
-
-
-    "Zika": {"obj_modelo": zika, 
-               "caminho": "./modelos/sarimax_zika.pkl"},
+CONFIG = {
+    "Dengue": {
+        "modelo": "./modelos/sarimax_dengue.pkl",
+        "dados": "./modelos/dataset_atual/dengue_tratado.csv",
+    },
+    "Chikungunya": {
+        "modelo": "./modelos/sarimax_chik.pkl",
+        "dados": "./modelos/dataset_atual/chikungunya_tratado.csv",
+    },
+    "Zika": {
+        "modelo": "./modelos/sarimax_zika.pkl",
+        "dados": "./modelos/dataset_atual/zika_tratado.csv",
+    },
 }
 
-def predicao(modelo):
+def predicao(nome):
+    cfg = CONFIG[nome]
+
     with st.spinner("Checando por novos dados..."):
         baixar_dados()
-    pkl_modelo = modelos[modelo]
-    pkl_modelo = pkl_modelo["obj_modelo"]
-    if modelo == "Dengue":
-        print("dengue")
-        dados_novos = pd.read_csv("./modelos/dataset_atual/dengue_tratado.csv",
+
+    pkl_modelo = carregar_modelo(cfg["modelo"])
+    dados_novos = pd.read_csv(
+        cfg["dados"],
         parse_dates=["data_iniSE"],
-        index_col="data_iniSE").sort_index()
-        caminho_modelo = "./modelos/sarimax_dengue.pkl"
-        with st.spinner("Atualizando modelo..."):
-            atualizado = atualizar_modelo(pkl_modelo, dados_novos, caminho_modelo)
-            if atualizado:
-                print("sim")
-                st.success("Modelo atualizado!")
-                resultados = previsao(pkl_modelo, dados_novos)
-            else:
-                print("não")
-                st.success("O modelo já está atualizado!")
-                resultados = previsao(pkl_modelo, dados_novos)
+        index_col="data_iniSE",
+    ).sort_index()
 
-        with row1:
-            st.write("Casos")
-            st.line_chart(resultados)
+    with st.spinner("Atualizando modelo..."):
+        atualizado = atualizar_modelo(pkl_modelo, dados_novos, cfg["modelo"])
+        resultados = previsao(pkl_modelo, dados_novos, semanas_futuro)
 
-    if modelo == "Chikungunya":
-        print("chik")
-        dados_novos = pd.read_csv("./modelos/dataset_atual/chikungunya_tratado.csv",
-        parse_dates=["data_iniSE"],
-        index_col="data_iniSE").sort_index()
-        caminho_modelo = "modelos/sarimax_chik.pkl"
-        with st.spinner("Atualizando modelo..."):
-            atualizado = atualizar_modelo(pkl_modelo, dados_novos, caminho_modelo)
-            if atualizado:
-                print("sim")
-                st.success("Modelo atualizado!")
-                resultados = previsao(pkl_modelo, dados_novos)
-            else:
-                print("não")
-                st.success("O modelo já está atualizado!")
-                resultados = previsao(pkl_modelo, dados_novos)
+    return atualizado, resultados
 
-        with row1:
-                st.write("Casos")
-                st.line_chart(resultados)
 
-    if modelo == "Zika":
-        print("zika")
-        dados_novos = pd.read_csv("./modelos/dataset_atual/zika_tratado.csv",
-        parse_dates=["data_iniSE"],
-        index_col="data_iniSE").sort_index()
-        caminho_modelo = "modelos/sarimax_zika.pkl"
-        with st.spinner("Atualizando modelo..."):
-            atualizado = atualizar_modelo(pkl_modelo, dados_novos, caminho_modelo)
-            if atualizado:
-                print("sim")
-                st.success("Modelo atualizado!")
-                resultados = previsao(pkl_modelo, dados_novos)
-            else:
-                print("não")
-                st.success("O modelo já está atualizado!")
-                resultados = previsao(pkl_modelo, dados_novos)
-
-        with row1:
-                st.write("Casos")
-                st.line_chart(resultados)
+def limpar():
+    st.session_state.pop("resultado", None)
 
 col1, col2, col3 = st.columns([1.5, 1, 1])
 with col2:
     st.image("./assets/mosquito.png", width=200)
 
-opcao = st.selectbox("Escolha uma Arbovirose", list(modelos.keys()))
-modelo_selecionado = modelos[opcao]
+opcao = st.selectbox(
+    "Escolha uma Arbovirose",
+    list(CONFIG.keys()),
+    on_change=limpar,
+)
 
-st.button("Fazer previsão", type="primary", on_click=predicao, args=(opcao,))
+semanas_futuro = st.number_input(
+    "Semanas para prever",
+    min_value=1,
+    max_value=12,
+    value=6,     
+    step=1,
+)
+
+modelo_atual = carregar_modelo(CONFIG[opcao]["modelo"])
+ultima_data = modelo_atual.model._index[-1]
+st.caption(f"Último dado do modelo: {ultima_data:%d/%m/%Y}")
+
+st.write("Semanas futuras selecionadas:", semanas_futuro)
+
+if st.button("Fazer previsão", type="primary"):
+    atualizado, resultados = predicao(opcao)
+    st.session_state["resultado"] = {
+        "opcao": opcao,
+        "atualizado": atualizado,
+        "dados": resultados,
+    }
 
 row1 = st.container()
-row2 = st.container()
 
-
+res = st.session_state.get("resultado")
+if res:
+    with row1:
+        if res["atualizado"]:
+            st.success("Modelo atualizado!")
+        else:
+            st.success("O modelo já está atualizado!")
+        st.write(f"Casos: {res['opcao']}")
+        st.line_chart(res["dados"])
+    csv = res["dados"].to_csv(index_label="data").encode("utf-8-sig")
+    nome_arquivo = f"previsao_{res['opcao'].lower()}.csv"
+    st.download_button(
+        label="Salvar previsão em um arquivo CSV",
+        data=csv,
+        file_name=nome_arquivo,
+        mime="text/csv",
+        type="primary"
+)

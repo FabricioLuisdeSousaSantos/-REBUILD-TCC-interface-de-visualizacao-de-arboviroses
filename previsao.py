@@ -2,9 +2,9 @@ import pandas as pd
 import warnings
 warnings.filterwarnings('ignore')
 
-def previsao(modelo, dados_novos):
+def previsao(modelo, dados_novos, semanas_futuro):
     ultima_data = modelo.model._index[-1] + pd.Timedelta(weeks=1)
-    datas_futuras = pd.date_range(start=ultima_data, periods=12, freq="W-SUN")
+    datas_futuras = pd.date_range(start=ultima_data, periods=semanas_futuro, freq="W-SUN")
 
     medias = dados_novos[["umidade", "temperatura"]].mean()
     exog = pd.DataFrame([medias.values] * len(datas_futuras), columns=medias.index, index=datas_futuras)
