@@ -37,7 +37,7 @@ def duplicados_ordenacao_data(df):
   df["data_iniSE"] = pd.to_datetime(df["data_iniSE"])
   df = df.set_index('data_iniSE')
   df = df.asfreq('W-SUN')
-  df = df.rename(columns={'umidmed': 'umidade', 'tempmed': 'temperatura'})
+  df = df.rename(columns={'umidmed': 'umidade', 'tempmed': 'temperatura', "pop":"populacao"})
   df = df.dropna()
   return df
 
@@ -45,30 +45,16 @@ def salvar_dataset(df, nome):
   caminho = "./modelos/dataset_atual/"
   df.to_csv(f"{caminho}/{nome}_tratado.csv", index=True)
 
+def baixar_dados(doenca):
+    carregar_dados_api_em_csv(2928703, doenca, 1, 53, 2000, datetime.date.today().strftime("%Y"))
 
-def baixar_dados():
-    carregar_dados_api_em_csv(2928703, "dengue", 1, 53, 2000, datetime.date.today().strftime("%Y"))
-    carregar_dados_api_em_csv(2928703, "chikungunya", 1, 53, 2000, datetime.date.today().strftime("%Y"))
-    carregar_dados_api_em_csv(2928703, "zika", 1, 53, 2000, datetime.date.today().strftime("%Y"))
+    dados = pd.read_csv(f"./modelos/dataset_atual/{doenca}.csv", usecols=["data_iniSE", "casos", "umidmed", "tempmed", "pop"])
 
-    dados_dengue = pd.read_csv("./modelos/dataset_atual/dengue.csv", usecols=["data_iniSE", "casos", "umidmed", "tempmed"])
-    dados_chikungunya = pd.read_csv("./modelos/dataset_atual/chikungunya.csv", usecols=["data_iniSE", "casos", "umidmed", "tempmed"])
-    dados_zika = pd.read_csv("./modelos/dataset_atual/zika.csv", usecols=["data_iniSE", "casos", "umidmed", "tempmed"])
+    for coluna in ["umidmed", "tempmed"]:
+        dados_nulos(dados, coluna)
 
-    for coluna in ["umidmed","tempmed"]:
-        dados_nulos(dados_dengue, coluna)
-        dados_nulos(dados_chikungunya, coluna)
-        dados_nulos(dados_zika, coluna)
+    dados = duplicados_ordenacao_data(dados)
+    salvar_dataset(dados, doenca)
 
-    dados_dengue = duplicados_ordenacao_data(dados_dengue)
-    dados_chikungunya = duplicados_ordenacao_data(dados_chikungunya)
-    dados_zika = duplicados_ordenacao_data(dados_zika)
-
-    salvar_dataset(dados_dengue, "dengue")
-    salvar_dataset(dados_chikungunya, "chikungunya")
-    salvar_dataset(dados_zika, "zika")
-
-    os.remove("./modelos/dataset_atual/dengue.csv")
-    os.remove("./modelos/dataset_atual/chikungunya.csv")
-    os.remove("./modelos/dataset_atual/zika.csv")
+    os.remove(f"./modelos/dataset_atual/{doenca}.csv")
    

@@ -3,12 +3,15 @@
 #---------------------------------------
 
 import streamlit as st
+import requests
 import pandas as pd
 from statsmodels.tsa.statespace.sarimax import SARIMAXResults
 from baixar_dados import baixar_dados
 from atualizar_modelo import atualizar_modelo
 from previsao import previsao
-import requests
+from calculo_incidencia import calcular_incidencia
+from estilo import aplicar_estilo
+
 
 st.set_page_config(
     page_title="Sistema de Avaliação de Arboviroses",
@@ -17,21 +20,22 @@ st.set_page_config(
     page_icon="./assets/mosquito.png"
 )
 
+aplicar_estilo()
+
 @st.cache_resource
 def carregar_modelo(caminho):
     return SARIMAXResults.load(caminho)
 
-
 CONFIG = {
-    "Dengue": {
+    "dengue": {
         "modelo": "./modelos/sarimax_dengue.pkl",
         "dados": "./modelos/dataset_atual/dengue_tratado.csv",
     },
-    "Chikungunya": {
+    "chikungunya": {
         "modelo": "./modelos/sarimax_chik.pkl",
         "dados": "./modelos/dataset_atual/chikungunya_tratado.csv",
     },
-    "Zika": {
+    "zika": {
         "modelo": "./modelos/sarimax_zika.pkl",
         "dados": "./modelos/dataset_atual/zika_tratado.csv",
     },
@@ -42,7 +46,7 @@ def predicao(nome):
     
     with st.spinner("Checando por novos dados..."):
         try:
-            baixar_dados()
+            baixar_dados(nome)
         except requests.exceptions.RequestException:
             return None
     pkl_modelo = carregar_modelo(cfg["modelo"])
@@ -55,8 +59,9 @@ def predicao(nome):
     with st.spinner("Atualizando modelo..."):
         atualizado = atualizar_modelo(pkl_modelo, dados_novos, cfg["modelo"])
         resultados = previsao(pkl_modelo, dados_novos, semanas_futuro)
+        populacao = dados_novos["populacao"].dropna().iloc[-1]
 
-    return atualizado, resultados
+    return atualizado, resultados, populacao
 
 def limpar():
     st.session_state.pop("resultado", None)
@@ -74,7 +79,7 @@ opcao = st.selectbox(
 semanas_futuro = st.number_input(
     "Semanas para prever",
     min_value=1,
-    max_value=12,
+    max_value=60,
     value=6,     
     step=1,
 )
@@ -88,11 +93,12 @@ st.write("Semanas futuras selecionadas:", semanas_futuro)
 if st.button("Fazer previsão", type="primary"):
     saida = predicao(opcao)
     if saida is not None:
-        atualizado, resultados = predicao(opcao)
+        atualizado, resultados, populacao = predicao(opcao)
         st.session_state["resultado"] = {
             "opcao": opcao,
             "atualizado": atualizado,
             "dados": resultados,
+            "populacao": populacao,
         }
     else:
         st.toast("Sem conexão, não foi possível atualizar.")
@@ -107,12 +113,15 @@ if res:
             st.success("O modelo já está atualizado!")
         st.write(f"Casos: {res['opcao']}")
         st.line_chart(res["dados"])
-    csv = res["dados"].to_csv(index_label="data").encode("utf-8-sig")
+
+    df_incidencia = calcular_incidencia(res["populacao"], res["dados"])
+    csv = df_incidencia.to_csv(index_label="data").encode("utf-8-sig")
     nome_arquivo = f"previsao_{res['opcao'].lower()}.csv"
+
     st.download_button(
         label="Salvar previsão em um arquivo CSV",
         data=csv,
         file_name=nome_arquivo,
         mime="text/csv",
-        type="primary"
-)
+        type="primary",
+    )
