@@ -85,8 +85,6 @@ semanas_futuro = st.number_input(
 )
 
 modelo_atual = carregar_modelo(CONFIG[opcao]["modelo"])
-ultima_data = modelo_atual.model._index[-1]
-st.caption(f"Último dado do modelo: {ultima_data:%d/%m/%Y}")
 
 st.write("Semanas futuras selecionadas:", semanas_futuro)
 
